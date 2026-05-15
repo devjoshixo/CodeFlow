@@ -1,39 +1,41 @@
 package main
 
 import (
+	"codeflow/internal/platform/config"
+	"codeflow/internal/platform/logger"
 	"codeflow/internal/platform/migrator"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	err := godotenv.Load()
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal(err)
 	}
+	logger.Init(cfg.Env == "production")
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("Port is: %s", port)
+	l := logger.Get()
+	l.Info("System initalized", "env", cfg.Env, "port", cfg.Port)
+
+	port := cfg.Port
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"status": "ok"}`)
 	})
 
-	log.Printf("Server started on the port localhost:%s", port)
+	l.Info("Server started on the ", "port", port)
 
-	if err := migrator.Run(os.Getenv("DATABASE_URL")); err != nil {
-		fmt.Println("Got error in migration")
+	if err := migrator.Run(cfg.DatabaseURL); err != nil {
+		l.Error("Got error in migration", "error", err)
+		os.Exit(1)
 	}
 
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("Server failed to start: %s", err)
+		l.Error("Server failed to start", "error", err)
+		os.Exit(1)
 	}
 
 }

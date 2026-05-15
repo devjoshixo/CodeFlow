@@ -1,6 +1,7 @@
 package migrator
 
 import (
+	"codeflow/internal/platform/logger"
 	"context"
 	"fmt"
 	"log"
@@ -12,14 +13,13 @@ import (
 )
 
 func Run(db_uri string) error {
-	fmt.Println(db_uri)
 	ctx := context.Background()
+	l := logger.Get()
 
 	conn, err := pgxpool.New(ctx, db_uri)
 
 	if err != nil {
 		return fmt.Errorf("Unable to connect to the db:%w", err)
-
 	}
 
 	err = conn.Ping(ctx)
@@ -27,7 +27,7 @@ func Run(db_uri string) error {
 		log.Fatalf("Could not connect to database on startup: %v", err)
 	}
 
-	fmt.Println("PostGres is connected")
+	l.Info("PostGres is connected")
 
 	migrationRunner(conn)
 
