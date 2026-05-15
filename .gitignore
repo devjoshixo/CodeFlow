@@ -1,0 +1,121 @@
+# ---- Go ----
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.a
+*.o
+
+# Test binary, built with `go test -c`
+*.test
+
+# Coverage output
+*.out
+coverage.txt
+coverage.html
+coverage.xml
+profile.cov
+
+# Go workspace
+go.work
+go.work.sum
+
+# Vendor directory (uncomment if not committing vendored deps)
+# vendor/
+
+# Air live reload
+.air.toml
+tmp/
+
+# Delve debugger
+__debug_bin
+__debug_bin*
+
+# ---- Environment / Secrets ----
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.secrets
+credentials.json
+service-account*.json
+
+# ---- Build / Dist ----
+/bin/
+/dist/
+/build/
+/out/
+/target/
+/release/
+
+# ---- Logs ----
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- IDE / Editors ----
+.idea/
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*.swn
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+.history/
+.ionide/
+
+# ---- OS ----
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Trash-*
+
+# ---- Docker ----
+docker-compose.override.yml
+.docker/
+
+# ---- Database ----
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+/data/
+/pgdata/
+
+# ---- Node (in case of tooling/scripts) ----
+node_modules/
+.npm
+.pnpm-store/
+.yarn/
+
+# ---- Misc ----
+*.bak
+*.tmp
+*.temp
+*.orig
+.cache/
+.coverage
+htmlcov/
