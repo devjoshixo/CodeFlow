@@ -3,8 +3,8 @@ package main
 import (
 	"codeflow/internal/platform/config"
 	"codeflow/internal/platform/logger"
+	"codeflow/internal/platform/middleware"
 	"codeflow/internal/platform/migrator"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -22,11 +22,16 @@ func main() {
 
 	port := cfg.Port
 
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"status": "ok"}`)
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	l.Info("Server started on the ", "port", port)
+	http.Handle("/", middleware.Recovery(middleware.Tracer(middleware.RequestLogger(mux))))
+
+	l.Info("Server starting ", "port", port)
 
 	if err := migrator.Run(cfg.DatabaseURL); err != nil {
 		l.Error("Got error in migration", "error", err)
