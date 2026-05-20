@@ -21,6 +21,10 @@ func NewUserRepo(db *pgxpool.Pool) *UserRepo {
 	return &UserRepo{db: db}
 }
 
+func NewRefreshTokenRepo(db *pgxpool.Pool) *RefreshTokenRepo {
+	return &RefreshTokenRepo{db: db}
+}
+
 func (r *UserRepo) FindUserByEmail(ctx context.Context, email string) (*auth.User, error) {
 	user := &auth.User{}
 	err := r.db.QueryRow(ctx,
@@ -46,13 +50,13 @@ func (r *UserRepo) FindUserByID(ctx context.Context, id string) (*auth.User, err
 	return user, nil
 }
 
-func (r *UserRepo) Create(ctx context.Context, user *auth.User) (*auth.User, error) {
+func (r *UserRepo) Create(ctx context.Context, user *auth.User) error {
 	_, err := r.db.Exec(ctx, "INSERT INTO users (id, email, password_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5);", user.ID, user.Email, user.PasswordHash, user.CreatedAt, user.UpdatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("error in creating user")
+		return fmt.Errorf("error in creating user")
 	}
 
-	return user, nil
+	return nil
 
 }
 
