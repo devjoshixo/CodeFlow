@@ -27,6 +27,18 @@ func (r *ExecutionRepo) Create(ctx context.Context, execution *execution.Executi
 	return nil
 }
 
+func (r *ExecutionRepo) MarkQueued(ctx context.Context, id string) error {
+	cmdTag, err := r.db.Exec(ctx, "UPDATE executions SET status=$1, updated_at=NOW() WHERE id=$2", execution.StatusQueued, id)
+	if err != nil {
+		return fmt.Errorf("failed to update execution to queue status")
+	}
+
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("execution not found")
+	}
+	return nil
+}
+
 func (r *ExecutionRepo) FindExecutionByID(ctx context.Context, id string) (*execution.Execution, error) {
 	exec := &execution.Execution{}
 	row := r.db.QueryRow(ctx, "SELECT id, user_id, language, code, status, output, error, exit_code, duration_ms, created_at, updated_at FROM executions WHERE id=$1;", id)

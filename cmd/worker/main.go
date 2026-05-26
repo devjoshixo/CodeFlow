@@ -5,6 +5,7 @@ import (
 	executionPostgres "codeflow/internal/execution/postgres"
 	"codeflow/internal/platform/config"
 	"codeflow/internal/platform/logger"
+	"codeflow/internal/sandbox"
 	"context"
 	"log"
 	"log/slog"
@@ -96,10 +97,20 @@ func runWorker(ctx context.Context, redis *redis.Client, svc *execution.Executio
 			continue
 		}
 
-		svc.UpdateExecution(ctx, executionID, execution.StatusRunning, "", "", 0, 0)
+		if err := svc.UpdateExecution(ctx, executionID, execution.StatusRunning, "", "", 0, 0); err != nil {
+			l.Error("failed to mark running ", "id", executionID, "error", err)
+		}
+
+		output, error, exitCode, durationMs, err := sandbox.DockerExecutor(ctx, exec)
+		if err != nil {
+			l.Error("error in docker execution", "error", err)
+			continue
+		}
 
 		l.Info("would execute", "language", exec.Language, "id", exec.ID)
 
-		svc.UpdateExecution(ctx, executionID, execution.StatusCompleted, "output here", "", 0, 100)
+		if err := svc.UpdateExecution(ctx, executionID, execution.StatusCompleted, output, error, exitCode, durationMs); err != nil {
+			l.Error("failed to mark completed", "id", executionID, "error", err)
+		}
 	}
 }

@@ -7,4 +7,5 @@ type ExecutionRepository interface {
 	FindExecutionByID(ctx context.Context, id string) (*Execution, error)
 	FindExecutionsByUser(ctx context.Context, userID string) ([]*Execution, error)
 	UpdateExecutionStatus(ctx context.Context, execution *Execution) error
+	MarkQueued(ctx context.Context, id string) error
 }

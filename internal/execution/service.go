@@ -32,7 +32,7 @@ func (s *ExecutionService) Submit(ctx context.Context, execution *Execution) (*E
 		Language:   execution.Language,
 		Code:       execution.Code,
 		Status:     StatusPending,
-		ExitCode:   1,
+		ExitCode:   0,
 		DurationMs: 0,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
@@ -42,10 +42,14 @@ func (s *ExecutionService) Submit(ctx context.Context, execution *Execution) (*E
 		return nil, fmt.Errorf("failed to insert the execution: %w", err)
 	}
 
+	if err := s.executionRepo.MarkQueued(ctx, newExec.ID); err != nil {
+		return nil, fmt.Errorf("Execution updation error:%w", err)
+	}
 	// push to Redis list
 	if err := s.redis.LPush(ctx, "executions:queue", newExec.ID).Err(); err != nil {
 		return nil, fmt.Errorf("failed to push execution id to redis:  %w", err)
 	}
+
 	return newExec, nil
 
 }
