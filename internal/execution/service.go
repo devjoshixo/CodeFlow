@@ -50,6 +50,17 @@ func (s *ExecutionService) Submit(ctx context.Context, execution *Execution) (*E
 
 }
 
+func (s *ExecutionService) GetByIDInternal(ctx context.Context, id string) (*Execution, error) {
+	execution, err := s.executionRepo.FindExecutionByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching execution: %w", err)
+	}
+	if execution == nil {
+		return nil, ErrExecutionNotFound
+	}
+	return execution, nil
+}
+
 func (s *ExecutionService) GetByID(ctx context.Context, id string, userId string) (*Execution, error) {
 	execution, err := s.executionRepo.FindExecutionByID(ctx, id)
 	if err != nil {
