@@ -101,7 +101,7 @@ func runWorker(ctx context.Context, redis *redis.Client, svc *execution.Executio
 			l.Error("failed to mark running ", "id", executionID, "error", err)
 		}
 
-		output, error, exitCode, durationMs, err := sandbox.DockerExecutor(ctx, exec)
+		_, _, exitCode, durationMs, err := sandbox.DockerExecutor(ctx, redis, exec)
 		if err != nil {
 			l.Error("error in docker execution", "error", err)
 			continue
@@ -109,7 +109,7 @@ func runWorker(ctx context.Context, redis *redis.Client, svc *execution.Executio
 
 		l.Info("would execute", "language", exec.Language, "id", exec.ID)
 
-		if err := svc.UpdateExecution(ctx, executionID, execution.StatusCompleted, output, error, exitCode, durationMs); err != nil {
+		if err := svc.UpdateExecution(ctx, executionID, execution.StatusCompleted, "", "", exitCode, durationMs); err != nil {
 			l.Error("failed to mark completed", "id", executionID, "error", err)
 		}
 	}

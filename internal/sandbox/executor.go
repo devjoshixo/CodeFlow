@@ -1,9 +1,11 @@
 package sandbox
 
 import (
-	"bytes"
 	"codeflow/internal/execution"
 	"context"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -11,10 +13,16 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/redis/go-redis/v9"
 )
 
-func DockerExecutor(ctx context.Context, execution *execution.Execution) (string, string, int, int, error) {
+type OutputChunk struct {
+	Sequence int
+	Stream   string
+	Data     string
+}
+
+func DockerExecutor(ctx context.Context, redis *redis.Client, execution *execution.Execution) (string, string, int, int, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -83,19 +91,10 @@ func DockerExecutor(ctx context.Context, execution *execution.Execution) (string
 	}
 
 	exitCode := 0
-
-	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNextExit)
-	select {
-	case status := <-statusCh:
-		exitCode = int(status.StatusCode)
-	case errCh := <-errCh:
-		return "", "", 0, 0, fmt.Errorf("container wait error:%w", errCh)
-	}
-
 	read, err := cli.ContainerLogs(ctx, resp.ID, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
-		Tail:       "50",
+		Follow:     true,
 	})
 	if err != nil {
 		return "", "", 0, 0, err
@@ -103,9 +102,46 @@ func DockerExecutor(ctx context.Context, execution *execution.Execution) (string
 
 	defer read.Close()
 
-	var stdout, stderr bytes.Buffer
-	if _, err := stdcopy.StdCopy(&stdout, &stderr, read); err != nil {
-		return "", "", 0, 0, fmt.Errorf("failed to demux container logs: %w", err)
+	sequence := 0
+	channel := fmt.Sprintf("execution:%s:output", execution.ID)
+
+	publish := func(stream string, data []byte) error {
+		chunk := OutputChunk{Sequence: sequence, Stream: stream, Data: string(data)}
+		payload, err := json.Marshal(chunk)
+		if err != nil {
+			return err
+		}
+		if err := redis.Publish(ctx, channel, payload).Err(); err != nil {
+			return err
+		}
+		sequence++
+		return nil
+	}
+
+	for {
+		streamType, data, err := readDockerFrame(read)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return "", "", 0, 0, fmt.Errorf("error in reading docker logs:%w", err)
+		}
+
+		if len(data) == 0 {
+			continue
+		}
+
+		if err := publish(streamType, data); err != nil {
+			return "", "", 0, 0, err
+		}
+	}
+
+	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	select {
+	case status := <-statusCh:
+		exitCode = int(status.StatusCode)
+	case errCh := <-errCh:
+		return "", "", 0, 0, fmt.Errorf("container wait error:%w", errCh)
 	}
 
 	cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
@@ -113,5 +149,54 @@ func DockerExecutor(ctx context.Context, execution *execution.Execution) (string
 	//This is the container time that it takes from start to finish
 	durationMs := int(time.Since(startTime).Milliseconds())
 
-	return stdout.String(), stderr.String(), exitCode, durationMs, nil
+	return "", "", exitCode, durationMs, nil
 }
+
+// reads docker log in chunks for live redis update
+func readDockerFrame(read io.Reader) (string, []byte, error) {
+	header := make([]byte, 8)
+
+	_, err := io.ReadFull(read, header)
+	if err != nil {
+		return "", nil, fmt.Errorf("couldn't read the stream:%w", err)
+	}
+
+	streamType := ""
+
+	switch header[0] {
+	case 1:
+		streamType = "stdout"
+	case 2:
+		streamType = "stderr"
+	default:
+		return "", nil, fmt.Errorf("couldn't determine the stream type:%w", err)
+	}
+
+	frameSize := binary.BigEndian.Uint32(header[4:8])
+
+	data := make([]byte, frameSize)
+
+	_, err = io.ReadFull(read, data)
+	if err != nil {
+		return "", nil, fmt.Errorf("couldn't read the data bytes:%w", err)
+	}
+
+	return streamType, data, nil
+}
+
+// func readDockerFrame(read io.Reader) (string, []byte, error) {
+// 	header := make([]byte, 8)
+// 	// Read 8 bytes
+// 	// If error, return it
+
+// 	streamType := "" // Check header[0]: 1=stdout, 2=stderr
+
+// 	// Get frame size from header[4:8]
+// 	// frameSize := binary.BigEndian.Uint32(header[4:8])
+
+// 	data := make([]byte, frameSize)
+// 	// Read frameSize bytes into data
+// 	// If error, return it
+
+// 	return streamType, data, nil
+// }

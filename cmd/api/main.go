@@ -50,6 +50,11 @@ func main() {
 	executionHandler := execution.NewExecutionHandler(executionService)
 
 	mux := http.NewServeMux()
+	protectedMux := http.NewServeMux()
+
+	protectedMux.HandleFunc("POST /api/v1/executions", executionHandler.Submit)
+	protectedMux.HandleFunc("GET /api/v1/executions/{id}", executionHandler.GetByID)
+	protectedMux.HandleFunc("GET /api/v1/executions", executionHandler.GetByUser)
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -63,9 +68,8 @@ func main() {
 	mux.HandleFunc("/api/v1/auth/logout", authHandler.Logout)
 
 	//Execution Routes
-	mux.HandleFunc("POST /api/v1/executions", executionHandler.Submit)
-	mux.HandleFunc("GET /api/v1/executions/{id}", executionHandler.GetByID)
-	mux.HandleFunc("GET /api/v1/executions", executionHandler.GetByUser)
+	mux.Handle("/api/v1/executions", middleware.TokenChecker(cfg.JWTSecret)(protectedMux))
+	mux.Handle("/api/v1/executions/", middleware.TokenChecker(cfg.JWTSecret)(protectedMux))
 
 	http.Handle("/", middleware.Recovery(middleware.Tracer(middleware.RequestLogger(mux))))
 

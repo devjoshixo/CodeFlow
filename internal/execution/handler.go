@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"codeflow/internal/platform/middleware"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -46,6 +47,11 @@ func strVal(s *string) string {
 var UserID = "4a6ba473-79bd-4fa9-b7bd-08fbe8f54263"
 
 func (h *ExecutionHandler) Submit(w http.ResponseWriter, r *http.Request) {
+	userIDKey, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok {
+		http.Error(w, "user ID not found", http.StatusUnauthorized)
+		return
+	}
 	var body struct {
 		Language string `json:"language"`
 		Code     string `json:"code"`
@@ -57,7 +63,7 @@ func (h *ExecutionHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	exec := &Execution{
-		UserID:   UserID, // extracted from JWT context
+		UserID:   userIDKey, // extracted from JWT context
 		Language: body.Language,
 		Code:     body.Code,
 	}
@@ -71,9 +77,14 @@ func (h *ExecutionHandler) Submit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ExecutionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	userIDKey, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok {
+		http.Error(w, "user ID not found", http.StatusUnauthorized)
+		return
+	}
 	id := r.PathValue("id")
 
-	exec, err := h.execution.GetByID(r.Context(), id, UserID)
+	exec, err := h.execution.GetByID(r.Context(), id, userIDKey)
 	if err != nil {
 		respond(w, http.StatusNotFound, map[string]string{"error": "no submissions found with this id"})
 		return
@@ -96,8 +107,12 @@ func (h *ExecutionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ExecutionHandler) GetByUser(w http.ResponseWriter, r *http.Request) {
-
-	execs, err := h.execution.GetByUser(r.Context(), UserID)
+	userIDKey, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok {
+		http.Error(w, "user ID not found", http.StatusUnauthorized)
+		return
+	}
+	execs, err := h.execution.GetByUser(r.Context(), userIDKey)
 	if err != nil {
 		respond(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

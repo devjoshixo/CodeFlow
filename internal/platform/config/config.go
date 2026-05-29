@@ -9,11 +9,12 @@ import (
 )
 
 type Config struct {
-	Port        string
-	DatabaseURL string
-	JWTSecret   string
-	RedisURL    string
-	Env         string
+	Port         string
+	Gateway_Port string
+	DatabaseURL  string
+	JWTSecret    string
+	RedisURL     string
+	Env          string
 }
 
 func Load() (*Config, error) {
@@ -21,11 +22,12 @@ func Load() (*Config, error) {
 		log.Println("no .env file found, reading from system environment")
 	}
 	cfg := &Config{
-		Port:        getenv("PORT", "8080"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		JWTSecret:   os.Getenv("JWT_SECRET"),
-		RedisURL:    getenv("REDIS_URL", "redis://localhost:6379"),
-		Env:         getenv("ENV", "development"),
+		Port:         getenv("PORT", "8080"),
+		Gateway_Port: getenv("GATEWAY_PORT", "8081"),
+		DatabaseURL:  os.Getenv("DATABASE_URL"),
+		JWTSecret:    os.Getenv("JWT_SECRET"),
+		RedisURL:     getenv("REDIS_URL", "redis://localhost:6379"),
+		Env:          getenv("ENV", "development"),
 	}
 
 	if cfg.DatabaseURL == "" {
