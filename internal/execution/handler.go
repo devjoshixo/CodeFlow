@@ -1,14 +1,21 @@
 package execution
 
 import (
+	"codeflow/internal/metrics"
 	"codeflow/internal/platform/middleware"
+	"codeflow/internal/ratelimit"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type ExecutionHandler struct {
 	execution *ExecutionService
+	redis     *redis.Client
+	metric    *metrics.Metrics
 }
 
 type ExecutionResponse struct {
@@ -23,8 +30,8 @@ type ExecutionResponse struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-func NewExecutionHandler(execution *ExecutionService) *ExecutionHandler {
-	return &ExecutionHandler{execution: execution}
+func NewExecutionHandler(execution *ExecutionService, redis *redis.Client, m *metrics.Metrics) *ExecutionHandler {
+	return &ExecutionHandler{execution: execution, redis: redis, metric: m}
 }
 
 func decode[T any](r *http.Request, v *T) error {
@@ -52,6 +59,17 @@ func (h *ExecutionHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user ID not found", http.StatusUnauthorized)
 		return
 	}
+
+	allowed, remaining, err := ratelimit.CheckLimit(r.Context(), h.redis, userIDKey, 30)
+	if err != nil {
+		respond(w, http.StatusInternalServerError, map[string]string{"error": "rate limit check failed!"})
+		return
+	}
+	if !allowed {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		respond(w, http.StatusTooManyRequests, map[string]string{"error": "rate limit exceeded"})
+		return
+	}
 	var body struct {
 		Language string `json:"language"`
 		Code     string `json:"code"`
@@ -72,7 +90,8 @@ func (h *ExecutionHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		respond(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-
+	h.metric.IncrementStarted()
+	w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 	respond(w, http.StatusCreated, map[string]any{"id": submission.ID, "status": submission.Status})
 }
 

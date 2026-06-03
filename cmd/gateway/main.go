@@ -7,8 +7,11 @@ import (
 	"codeflow/internal/platform/config"
 	"codeflow/internal/platform/logger"
 	"context"
-	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	// authPostgres "codeflow/internal/auth/postgres"
 	"github.com/gorilla/websocket"
@@ -46,11 +49,52 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ready", readinessHandler(pool, redisClient))
 	mux.HandleFunc("GET /ws/executions/{id}", hub.HandleWebSocket(cfg.JWTSecret, execSvc, redisClient))
 
-	l.Info("gateway starting", "port", cfg.Port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", cfg.Gateway_Port), mux); err != nil {
+	server := &http.Server{
+		Addr:    ":" + cfg.Gateway_Port,
+		Handler: mux,
+	}
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		l.Info("shutdown signal received")
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			l.Error("shutdown error", "error", err)
+		}
+	}()
+
+	l.Info("gateway starting", "port", cfg.Gateway_Port)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		l.Error("server error", "error", err)
 	}
+	l.Info("api server stopped gracefully")
 
+}
+
+func readinessHandler(pool *pgxpool.Pool, redis *redis.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		if err := pool.Ping(ctx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("db unavailable\n"))
+			return
+		}
+
+		if err := redis.Ping(ctx).Err(); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("redis unavaiable\n"))
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ready\n"))
+	}
 }
